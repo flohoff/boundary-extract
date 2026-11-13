@@ -104,6 +104,29 @@ static Geom simplify_cover(const GEOSGeometry* g, double frac) {
     return result ? std::move(result) : clone(g);
 }
 
+// Buffer by meters (local equirectangular scaling); result always covers g.
+static int scale_x(double* x, double* y, void* ud) {
+    (void)y;
+    *x *= *static_cast<double*>(ud);
+    return 1;
+}
+
+static Geom buffer_meters(const GEOSGeometry* g, double meters) {
+    double y0, y1;
+    GEOSGeom_getYMin_r(ctx, g, &y0);
+    GEOSGeom_getYMax_r(ctx, g, &y1);
+    double k = std::max(std::cos((y0 + y1) / 2 * M_PI / 180), 0.01);
+    double inv = 1 / k;
+    Geom p{GEOSGeom_transformXY_r(ctx, g, scale_x, &k)};
+    if (!p) return clone(g);
+    Geom b{GEOSBuffer_r(ctx, p.get(), meters / 111320.0, 8)};
+    if (!b) return clone(g);
+    Geom back{GEOSGeom_transformXY_r(ctx, b.get(), scale_x, &inv)};
+    if (!back) return clone(g);
+    Geom u{GEOSUnion_r(ctx, back.get(), g)};
+    return clean_polygons(u ? std::move(u) : std::move(back));
+}
+
 // ---------- output ----------
 
 static std::string json_esc(const std::string& s) {
@@ -180,20 +203,58 @@ static std::string safe_name(const std::string& s) {
     return o;
 }
 
+enum : unsigned { OUT_POLY = 1, OUT_GEOJSON = 2, OUT_LINESTRING = 4 };
+
+static bool parse_outputs(const std::string& list, unsigned& mask) {
+    size_t pos = 0;
+    while (pos <= list.size()) {
+        size_t e = list.find(',', pos);
+        if (e == std::string::npos) e = list.size();
+        std::string t = list.substr(pos, e - pos);
+        pos = e + 1;
+        if (t.empty()) continue;
+        unsigned bit;
+        if (t == "poly") bit = OUT_POLY;
+        else if (t == "geojson") bit = OUT_GEOJSON;
+        else if (t == "linestring") bit = OUT_LINESTRING;
+        else return false;
+        mask |= bit;
+    }
+    return true;
+}
+
 struct Writer {
     std::vector<Boundary>& bs;
     double tol;
+    unsigned outputs;
+    bool simplify;
+    double buffer;
     size_t done = 0, total = 0, fallback = 0;
+
+    void write_all(const fs::path& stem, const Boundary& b, const GEOSGeometry* g) {
+        if (outputs & OUT_POLY) write_poly(stem.string() + ".poly", b, g);
+        if (outputs & OUT_GEOJSON) write_geojson(stem.string() + ".geojson", b, g);
+        if (outputs & OUT_LINESTRING) {
+            Geom ls{GEOSBoundary_r(ctx, g)};
+            if (ls) write_geojson(stem.string() + ".linestring.geojson", b, ls.get());
+        }
+    }
 
     void emit(int idx, const fs::path& dir, const std::string& base) {
         Boundary& b = bs[idx];
         fs::path stem = dir / base;
-        write_geojson(stem.string() + ".geojson", b, b.geom.get());
-        Geom s = simplify_cover(b.geom.get(), tol);
-        write_geojson(stem.string() + ".simple.geojson", b, s.get());
-        write_poly(stem.string() + ".simple.poly", b, s.get());
-        Geom ls{GEOSBoundary_r(ctx, s.get())};
-        if (ls) write_geojson(stem.string() + ".simple.linestring.geojson", b, ls.get());
+        Geom buf;
+        const GEOSGeometry* g = b.geom.get();
+        if (buffer > 0) {
+            buf = buffer_meters(g, buffer);
+            g = buf.get();
+        }
+        if (simplify) {
+            Geom s = simplify_cover(g, tol);
+            write_all(stem, b, s.get());
+        } else {
+            write_all(stem, b, g);
+        }
         if (++done % 1000 == 0) std::fprintf(stderr, "  written %zu/%zu\n", done, total);
         b.geom.reset();
 
@@ -322,7 +383,8 @@ static void build_hierarchy(std::vector<Boundary>& bs) {
 // ---------- main ----------
 
 static void usage() {
-    std::fprintf(stderr, "usage: boundary-extract in.pbf outdir [--min-level N] [--max-level N] [--tol F]\n");
+    std::fprintf(stderr, "usage: boundary-extract in.pbf outdir [--min-level N] [--max-level N] [--buffer METERS] [--simplify] [--tol F] [--output LIST]\n"
+                         "  LIST: comma-separated (or repeated) of poly,geojson,linestring (default geojson)\n");
     std::exit(2);
 }
 
@@ -330,8 +392,17 @@ int main(int argc, char** argv) {
     std::vector<std::string> pos;
     int lo = 0, hi = 99;
     double tol = 0.001;
+    unsigned outputs = 0;
+    bool simplify = false;
+    double buffer = 0;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
+        if (a == "--buffer" && i + 1 < argc) { buffer = std::atof(argv[++i]); continue; }
+        if (a == "--simplify") { simplify = true; continue; }
+        if (a == "--output" && i + 1 < argc) {
+            if (!parse_outputs(argv[++i], outputs)) usage();
+            continue;
+        }
         if (a == "--min-level" && i + 1 < argc) lo = std::atoi(argv[++i]);
         else if (a == "--max-level" && i + 1 < argc) hi = std::atoi(argv[++i]);
         else if (a == "--tol" && i + 1 < argc) tol = std::atof(argv[++i]);
@@ -339,6 +410,7 @@ int main(int argc, char** argv) {
         else pos.push_back(a);
     }
     if (pos.size() != 2) usage();
+    if (!outputs) outputs = OUT_GEOJSON;
 
     ctx = GEOS_init_r();
     try {
@@ -376,7 +448,7 @@ int main(int argc, char** argv) {
 
         std::fprintf(stderr, "writing\n");
         fs::create_directories(pos[1]);
-        Writer w{bs, tol};
+        Writer w{bs, tol, outputs, simplify, buffer};
         w.total = bs.size();
         std::vector<int> roots;
         for (size_t i = 0; i < bs.size(); ++i) if (bs[i].parent < 0) roots.push_back(int(i));

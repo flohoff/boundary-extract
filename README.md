@@ -9,19 +9,21 @@ Needs libosmium, protozero, GEOS, expat, zlib, bz2, CMake.
 
 ## Usage
 
-    build/boundary-extract in.pbf outdir [--min-level N] [--max-level N] [--tol F]
+    build/boundary-extract in.pbf outdir [--min-level N] [--max-level N] [--buffer METERS] [--simplify] [--tol F] [--output LIST]
 
 - `--min-level/--max-level`: admin_level range (default: all)
+- `--buffer METERS`: grow geometry by this distance (always covers the original); applied before `--simplify`
+- `--simplify`: simplify geometry before writing (result always covers the original)
 - `--tol F`: simplification tolerance as fraction of bbox diagonal (default 0.001)
+- `--output LIST`: comma-separated and/or repeated: `poly`, `geojson`, `linestring` (default: `geojson`)
 
 ## Output
+    outdir/4-Nordrhein-Westfalen.poly
     outdir/4-Nordrhein-Westfalen.geojson
-    outdir/4-Nordrhein-Westfalen.simple.geojson
-    outdir/4-Nordrhein-Westfalen.simple.poly
+    outdir/4-Nordrhein-Westfalen.linestring.geojson
     outdir/4-Nordrhein-Westfalen/5-Regierungsbezirk Detmold.geojson
     ...
 
 - Directories mirror the geometric containment hierarchy (levels may be skipped).
-- `.geojson`: full geometry, OSM tags as properties, plus `@id` (`relation/N`).
-- `.simple.geojson` / `.simple.poly`: simplified geometry that always covers the original.
-- `.simple.linestring.geojson`: outline of the simplified geometry as (Multi)LineString.
+- `.geojson`: (Multi)Polygon, OSM tags as properties, plus `@id` (`relation/N`).
+- `.linestring.geojson`: outline as (Multi)LineString.
