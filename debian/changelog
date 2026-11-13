@@ -1,0 +1,12 @@
+boundary-extract (1) trixie; urgency=medium
+
+  * First version
+  * Make output configurable and add the possibility of a buffer before writing
+
+ -- Florian Lohoff <f@zz.de>  Fri, 13 Nov 2026 18:45:42 +0100
+
+boundary-extract (0.1.0) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Florian Lohoff <f@zz.de>  Fri, 13 Nov 2026 18:44:03 +0100
