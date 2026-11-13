@@ -1,2 +1,9 @@
 build/
 nrw/
+debian/.debhelper/
+debian/*.debhelper*
+debian/*.substvars
+debian/boundary-extract/
+debian/files
+debian/debhelper-build-stamp
+obj-*/

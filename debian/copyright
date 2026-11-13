@@ -1,0 +1,11 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: boundary-extract
+
+Files: *
+Copyright: 2025 Florian Lohoff <f@zz.de>
+License: CC0-1.0
+ To the extent possible under law, the author has waived all copyright and
+ related or neighboring rights to this work.
+ .
+ On Debian systems, the full text of the CC0 1.0 Universal license can be
+ found in /usr/share/common-licenses/CC0-1.0.

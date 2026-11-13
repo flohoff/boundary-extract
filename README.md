@@ -27,3 +27,6 @@ Needs libosmium, protozero, GEOS, expat, zlib, bz2, CMake.
 - Directories mirror the geometric containment hierarchy (levels may be skipped).
 - `.geojson`: (Multi)Polygon, OSM tags as properties, plus `@id` (`relation/N`).
 - `.linestring.geojson`: outline as (Multi)LineString.
+
+## License
+CC0 1.0 (public domain dedication).

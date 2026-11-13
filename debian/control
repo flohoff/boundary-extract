@@ -1,0 +1,22 @@
+Source: boundary-extract
+Section: science
+Priority: optional
+Maintainer: Florian Lohoff <f@zz.de>
+Build-Depends: cmake,
+               debhelper-compat (= 13),
+               libbz2-dev,
+               libexpat1-dev,
+               libgeos-dev,
+               libosmium2-dev,
+               libprotozero-dev,
+               zlib1g-dev
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: boundary-extract
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: extract OSM administrative boundaries into a directory tree
+ Reads an OpenStreetMap .pbf file and writes administrative boundaries as
+ poly, GeoJSON polygon and GeoJSON linestring files. Directories mirror the
+ geometric containment hierarchy. Supports buffering and simplification.
